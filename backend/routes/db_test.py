@@ -3,7 +3,7 @@ from lib.supabase import supabase
 
 router = APIRouter()
 
-@router.get("/db_test")
+@router.get("/db-test")
 def db_test():
     response = supabase.table("events").select("*").execute()
 
