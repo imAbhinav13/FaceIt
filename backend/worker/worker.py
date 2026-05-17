@@ -1,0 +1,139 @@
+import time
+from datetime import datetime, timezone
+
+from lib.supabase import supabase
+from worker.jobs.process_photo import process_photo_job
+
+
+POLL_SECONDS = 5
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def get_next_pending_job():
+    response = (
+        supabase
+        .table("job_queue")
+        .select("*")
+        .eq("status", "pending")
+        .eq("job_type", "process_photo")
+        .order("created_at")
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        return None
+
+    return response.data[0]
+
+
+def mark_job_processing(job_id: str):
+    supabase.table("job_queue").update({
+        "status": "processing",
+        "started_at": now_iso(),
+        "error": None,
+    }).eq("id", job_id).execute()
+
+
+def mark_job_done(job_id: str):
+    supabase.table("job_queue").update({
+        "status": "done",
+        "completed_at": now_iso(),
+        "error": None,
+    }).eq("id", job_id).execute()
+
+
+def mark_job_failed(job_id: str, error: str):
+    supabase.table("job_queue").update({
+        "status": "failed",
+        "completed_at": now_iso(),
+        "error": error,
+    }).eq("id", job_id).execute()
+
+def update_room_status_after_photo_processed(event_id: str):
+    response = (
+        supabase
+        .table("event_photos")
+        .select("id, processing_status")
+        .eq("event_id", event_id)
+        .execute()
+    )
+
+    photos = response.data or []
+
+    if not photos:
+        return
+
+    total = len(photos)
+    done = len([
+        photo for photo in photos
+        if photo["processing_status"] == "done"
+    ])
+    failed = len([
+        photo for photo in photos
+        if photo["processing_status"] == "failed"
+    ])
+
+    if done == total:
+        new_status = "ready"
+    elif done + failed == total:
+        # MVP fallback: if all jobs finished but some failed,
+        # still allow the room to move forward.
+        new_status = "ready"
+    else:
+        new_status = "processing"
+
+    supabase.table("events").update({
+        "status": new_status
+    }).eq("id", event_id).execute()
+
+    print(
+        f"Room status checked: event_id={event_id} | "
+        f"total={total}, done={done}, failed={failed}, status={new_status}"
+    )
+    
+def run_worker():
+    print("FaceIt worker started.")
+    print(f"Polling every {POLL_SECONDS} seconds...")
+
+    while True:
+        job = get_next_pending_job()
+
+        if not job:
+            time.sleep(POLL_SECONDS)
+            continue
+
+        job_id = job["id"]
+        payload = job["payload"]
+
+        print(f"Processing job: {job_id}")
+
+        try:
+            mark_job_done(job_id)
+            result = process_photo_job(payload)
+            update_room_status_after_photo_processed(result["event_id"])
+
+            print(
+                f"Job done: {job_id} | "
+                f"photo_id={result['photo_id']} | "
+                f"faces_detected={result['faces_detected']}"
+                
+                )
+
+        except Exception as e:
+            error_message = str(e)
+            mark_job_failed(job_id, error_message)
+
+            event_id = job.get("payload", {}).get("event_id")
+            if event_id:
+                update_room_status_after_photo_processed(event_id)
+                
+            print(f"Job failed: {job_id}")
+            print(error_message)
+
+
+if __name__ == "__main__":
+    run_worker()

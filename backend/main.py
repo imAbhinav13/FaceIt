@@ -6,6 +6,8 @@ from lib.config import settings
 from routes.db_test import router as db_test_router
 from routes.auth_test import router as auth_test_router
 from routes.enroll import router as enroll_router
+from routes.rooms import router as rooms_router
+from routes.photos import router as photos_router
 
 app = FastAPI(  title="FaceIt Backend", version="0.1")
 
@@ -24,6 +26,8 @@ app.include_router(health_router)
 app.include_router(db_test_router)
 app.include_router(auth_test_router)
 app.include_router(enroll_router)
+app.include_router(rooms_router)
+app.include_router(photos_router)
 
 @app.get("/")
 def root():

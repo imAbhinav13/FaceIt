@@ -1,0 +1,1 @@
+ALTER TABLE face_embeddings ADD CONSTRAINT face_embeddings_user_id_key UNIQUE (user_id);

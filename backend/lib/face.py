@@ -94,3 +94,35 @@ def average_embeddings(embeddings: list[list[float]]) -> list[float]:
     averaged = np.mean(array, axis=0)
 
     return averaged.tolist()
+
+
+def generate_face_embeddings_from_photo_path(image_path: str) -> list[dict]:
+    """
+    Generates embeddings for all detected faces in an event photo.
+    Returns one item per detected face.
+    """
+    result = DeepFace.represent(
+        img_path=image_path,
+        model_name=MODEL_NAME,
+        detector_backend=DETECTOR_BACKEND,
+        enforce_detection=False,
+    )
+
+    faces: list[dict] = []
+
+    for item in result:
+        embedding = item.get("embedding")
+        facial_area = item.get("facial_area", {})
+
+        if embedding and len(embedding) == 512:
+            faces.append({
+                "embedding": embedding,
+                "bounding_box": {
+                    "x": facial_area.get("x"),
+                    "y": facial_area.get("y"),
+                    "w": facial_area.get("w"),
+                    "h": facial_area.get("h"),
+                },
+            })
+
+    return faces
