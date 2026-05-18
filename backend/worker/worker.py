@@ -1,9 +1,8 @@
 import time
-from datetime import datetime, timezone
 
 from lib.supabase import supabase
 from worker.jobs.process_photo import process_photo_job
-
+from datetime import datetime, timedelta, timezone
 
 POLL_SECONDS = 5
 
@@ -68,21 +67,38 @@ def update_room_status_after_photo_processed(event_id: str):
         return
 
     total = len(photos)
+
     done = len([
         photo for photo in photos
         if photo["processing_status"] == "done"
     ])
+
     failed = len([
         photo for photo in photos
         if photo["processing_status"] == "failed"
     ])
 
+    pending = len([
+        photo for photo in photos
+        if photo["processing_status"] == "pending"
+    ])
+
+    processing = len([
+        photo for photo in photos
+        if photo["processing_status"] == "processing"
+    ])
+
+    unfinished = pending + processing
+
     if done == total:
         new_status = "ready"
-    elif done + failed == total:
-        # MVP fallback: if all jobs finished but some failed,
-        # still allow the room to move forward.
+    elif done > 0 and unfinished == 0:
+        # Some photos failed, but at least one photo processed successfully.
+        # The room can move forward with the successfully processed photos.
         new_status = "ready"
+    elif done == 0 and failed == total:
+        # Every photo failed. Do not show this room as ready.
+        new_status = "failed"
     else:
         new_status = "processing"
 
@@ -92,12 +108,42 @@ def update_room_status_after_photo_processed(event_id: str):
 
     print(
         f"Room status checked: event_id={event_id} | "
-        f"total={total}, done={done}, failed={failed}, status={new_status}"
+        f"total={total}, done={done}, failed={failed}, "
+        f"pending={pending}, processing={processing}, status={new_status}"
     )
-    
+
+#fn to reset job if it crashes and changes status to pending from processing
+#This prevents jobs from being permanently stranded in processing after a worker crash.
+def reset_stuck_jobs():
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+
+    response = (
+        supabase
+        .table("job_queue")
+        .update({
+            "status": "pending",
+            "started_at": None,
+            "completed_at": None,
+            "error": "Reset stale processing job on worker startup",
+        })
+        .eq("status", "processing")
+        .lt("started_at", cutoff.isoformat())
+        .execute()
+    )
+
+    reset_count = len(response.data or [])
+
+    if reset_count > 0:
+        print(f"Reset {reset_count} stuck processing job(s) back to pending.")
+    else:
+        print("No stuck processing jobs found.")
+
+
 def run_worker():
     print("FaceIt worker started.")
     print(f"Polling every {POLL_SECONDS} seconds...")
+    
+    reset_stuck_jobs()
 
     while True:
         job = get_next_pending_job()
