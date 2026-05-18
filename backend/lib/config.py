@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     confirmed_threshold: float = 0.60
     review_threshold: float = 0.40
-
+    signed_url_ttl_seconds: int = 3600
     class Config:
         env_file = ".env"
 
