@@ -127,6 +127,7 @@ def insert_photo_matches(user_id: str, best_matches: list[dict]) -> int:
 
         rows_to_insert.append({
             "photo_id": match["photo_id"],
+            "photo_face_id": match["face_id"],
             "user_id": user_id,
             "confidence": similarity,
             "status": status,

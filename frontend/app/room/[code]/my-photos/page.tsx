@@ -134,13 +134,14 @@ export default function MyPhotosPage() {
     const shouldPoll =
       matchStatus.match_job_status === "pending" ||
       matchStatus.match_job_status === "processing" ||
-      matchStatus.match_job_status === "not_started";
+      matchStatus.match_job_status === "not_started"||
+      matchStatus.review_count > 0; // auto refresh in receiver gallery after appoval
 
     if (!shouldPoll) return;
 
     const interval = window.setInterval(() => {
       loadMatchStatus();
-    }, 3000);
+    }, 5000);
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 from deepface import DeepFace
+from PIL import Image
 
 
 MODEL_NAME = "Facenet512"
@@ -100,7 +101,13 @@ def generate_face_embeddings_from_photo_path(image_path: str) -> list[dict]:
     """
     Generates embeddings for all detected faces in an event photo.
     Returns one item per detected face.
+
+    Bounding boxes are stored both as raw pixels and percentages so the frontend
+    can draw boxes correctly on responsive images.
     """
+    image = Image.open(image_path)
+    image_width, image_height = image.size
+
     result = DeepFace.represent(
         img_path=image_path,
         model_name=MODEL_NAME,
@@ -115,13 +122,24 @@ def generate_face_embeddings_from_photo_path(image_path: str) -> list[dict]:
         facial_area = item.get("facial_area", {})
 
         if embedding and len(embedding) == 512:
+            x = facial_area.get("x") or 0
+            y = facial_area.get("y") or 0
+            w = facial_area.get("w") or 0
+            h = facial_area.get("h") or 0
+
             faces.append({
                 "embedding": embedding,
                 "bounding_box": {
-                    "x": facial_area.get("x"),
-                    "y": facial_area.get("y"),
-                    "w": facial_area.get("w"),
-                    "h": facial_area.get("h"),
+                    "x": x,
+                    "y": y,
+                    "w": w,
+                    "h": h,
+                    "image_width": image_width,
+                    "image_height": image_height,
+                    "x_pct": (x / image_width) * 100 if image_width else 0,
+                    "y_pct": (y / image_height) * 100 if image_height else 0,
+                    "w_pct": (w / image_width) * 100 if image_width else 0,
+                    "h_pct": (h / image_height) * 100 if image_height else 0,
                 },
             })
 
