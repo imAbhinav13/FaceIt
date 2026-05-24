@@ -11,13 +11,14 @@ from lib.utils import (
     is_valid_room_code,
 )
 
-
 router = APIRouter()
+ALLOWED_TTL_DAYS = [2, 5, 7]
 
 
 class CreateRoomRequest(BaseModel):
     name: str
     room_code: str | None = None
+    ttl_days: int = 2
 
 
 def room_code_exists(room_code: str) -> bool:
@@ -58,6 +59,12 @@ def create_room(payload: CreateRoomRequest, user=Depends(get_current_user)):
             detail="Event name is required"
         )
 
+    if payload.ttl_days not in ALLOWED_TTL_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid TTL selection"
+        )
+
     if payload.room_code:
         room_code = normalize_room_code(payload.room_code)
 
@@ -75,7 +82,10 @@ def create_room(payload: CreateRoomRequest, user=Depends(get_current_user)):
     else:
         room_code = generate_unique_room_code()
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+    expires_at = (
+        datetime.now(timezone.utc)
+        + timedelta(days=payload.ttl_days)
+    )
 
     response = (
         supabase

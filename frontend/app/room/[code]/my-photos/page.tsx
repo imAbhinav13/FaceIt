@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { api } from "@/lib/api";
 
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
+
 type MatchStatusResponse = {
   success: boolean;
   room: {
@@ -57,12 +60,14 @@ export default function MyPhotosPage() {
 
   const [matchStatus, setMatchStatus] =
     useState<MatchStatusResponse | null>(null);
+
   const [photosResponse, setPhotosResponse] =
     useState<MyPhotosResponse | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [message, setMessage] = useState("");
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -121,10 +126,87 @@ export default function MyPhotosPage() {
     }
   }
 
+  async function downloadAllAsZip() {
+    setMessage("");
+
+    const token = await getToken();
+
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    setDownloadingZip(true);
+
+    try {
+      // Fresh signed URLs
+      const response = await api.get(`/rooms/${code}/my-photos`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const freshPhotos = response.data.photos || [];
+
+      if (freshPhotos.length === 0) {
+        setMessage("No confirmed photos are available to download.");
+        return;
+      }
+
+      if (freshPhotos.length > 20) {
+        const proceed = window.confirm(
+          `You are downloading ${freshPhotos.length} photos. This may take time and use browser memory. Continue?`
+        );
+
+        if (!proceed) {
+          return;
+        }
+      }
+
+      const zip = new JSZip();
+
+      for (let index = 0; index < freshPhotos.length; index++) {
+        const photo = freshPhotos[index];
+
+        const fileResponse = await fetch(photo.signed_url);
+
+        if (!fileResponse.ok) {
+          console.warn(`Failed to fetch photo ${photo.photo_id}`);
+          continue;
+        }
+
+        const blob = await fileResponse.blob();
+
+        const extension =
+          photo.storage_path?.split(".").pop() || "jpg";
+
+        zip.file(
+          `faceit_photo_${index + 1}.${extension}`,
+          blob
+        );
+      }
+
+      const content = await zip.generateAsync({
+        type: "blob",
+      });
+
+      saveAs(content, `${code}_matched_photos.zip`);
+    } catch (error: any) {
+      setMessage(
+        error.response?.data?.detail ||
+          error.message ||
+          "Failed to download ZIP"
+      );
+    } finally {
+      setDownloadingZip(false);
+    }
+  }
+
   useEffect(() => {
     if (!code) return;
 
     loadMatchStatus();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
@@ -134,8 +216,8 @@ export default function MyPhotosPage() {
     const shouldPoll =
       matchStatus.match_job_status === "pending" ||
       matchStatus.match_job_status === "processing" ||
-      matchStatus.match_job_status === "not_started"||
-      matchStatus.review_count > 0; // auto refresh in receiver gallery after appoval
+      matchStatus.match_job_status === "not_started" ||
+      matchStatus.review_count > 0;
 
     if (!shouldPoll) return;
 
@@ -155,8 +237,13 @@ export default function MyPhotosPage() {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-lg rounded-xl border border-red-300 bg-red-50 p-6">
-          <h1 className="text-xl font-bold text-red-800">Gallery Error</h1>
-          <p className="mt-2 text-sm text-red-700">{message}</p>
+          <h1 className="text-xl font-bold text-red-800">
+            Gallery Error
+          </h1>
+
+          <p className="mt-2 text-sm text-red-700">
+            {message}
+          </p>
 
           <button
             onClick={() => router.push("/room/join")}
@@ -182,8 +269,14 @@ export default function MyPhotosPage() {
         <div className="rounded-xl border p-6 space-y-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm text-gray-500">My Matched Photos</p>
-              <h1 className="text-3xl font-bold">{room.name}</h1>
+              <p className="text-sm text-gray-500">
+                My Matched Photos
+              </p>
+
+              <h1 className="text-3xl font-bold">
+                {room.name}
+              </h1>
+
               <p className="mt-1 text-sm text-gray-600">
                 Room Code: {room.room_code}
               </p>
@@ -197,17 +290,28 @@ export default function MyPhotosPage() {
           <div className="grid gap-3 text-sm md:grid-cols-3">
             <div className="rounded-lg bg-gray-100 p-3">
               <p className="text-gray-500">Room Status</p>
-              <p className="font-medium uppercase">{room.status}</p>
+
+              <p className="font-medium uppercase">
+                {room.status}
+              </p>
             </div>
 
             <div className="rounded-lg bg-gray-100 p-3">
-              <p className="text-gray-500">Confirmed Matches</p>
-              <p className="font-medium">{matchStatus.matched_count}</p>
+              <p className="text-gray-500">
+                Confirmed Matches
+              </p>
+
+              <p className="font-medium">
+                {matchStatus.matched_count}
+              </p>
             </div>
 
             <div className="rounded-lg bg-gray-100 p-3">
               <p className="text-gray-500">Needs Review</p>
-              <p className="font-medium">{matchStatus.review_count}</p>
+
+              <p className="font-medium">
+                {matchStatus.review_count}
+              </p>
             </div>
           </div>
         </div>
@@ -217,8 +321,10 @@ export default function MyPhotosPage() {
             <h2 className="text-xl font-bold text-yellow-900">
               Matching has not started yet
             </h2>
+
             <p className="mt-2 text-sm text-yellow-800">
-              Go back to the join page and start matching for this room.
+              Go back to the join page and start matching for
+              this room.
             </p>
 
             <button
@@ -233,9 +339,13 @@ export default function MyPhotosPage() {
         {(matchStatus.match_job_status === "pending" ||
           matchStatus.match_job_status === "processing") && (
           <div className="rounded-xl border bg-gray-50 p-6">
-            <h2 className="text-xl font-bold">Finding your photos...</h2>
+            <h2 className="text-xl font-bold">
+              Finding your photos...
+            </h2>
+
             <p className="mt-2 text-sm text-gray-600">
-              Matching is still running. This page will refresh automatically.
+              Matching is still running. This page will
+              refresh automatically.
             </p>
           </div>
         )}
@@ -245,23 +355,26 @@ export default function MyPhotosPage() {
             <h2 className="text-xl font-bold text-red-800">
               Matching failed
             </h2>
+
             <p className="mt-2 text-sm text-red-700">
-              {matchStatus.job?.error || "Something went wrong during matching."}
+              {matchStatus.job?.error ||
+                "Something went wrong during matching."}
             </p>
           </div>
         )}
 
-        {matchStatus.match_job_status === "done" && loadingPhotos && (
-          <div className="rounded-xl border bg-gray-50 p-6">
-            Loading matched photos...
-          </div>
-        )}
+        {matchStatus.match_job_status === "done" &&
+          loadingPhotos && (
+            <div className="rounded-xl border bg-gray-50 p-6">
+              Loading matched photos...
+            </div>
+          )}
 
         {matchStatus.match_job_status === "done" &&
           !loadingPhotos &&
           photos.length === 0 && (
             <div className="rounded-xl border bg-gray-50 p-6">
-              <h2 className="text-xl font-bold">No confirmed matches yet</h2>
+              <h2 className="text-xl font-bold"> No confirmed matches yet </h2>
               <p className="mt-2 text-sm text-gray-600">
                 {photosResponse?.message ||
                   "No confirmed photos were found for your enrolled face."}
@@ -269,47 +382,79 @@ export default function MyPhotosPage() {
 
               {matchStatus.review_count > 0 && (
                 <p className="mt-2 text-sm text-yellow-700">
-                  Some possible matches are waiting for uploader review. Review
-                  queue will be added in Phase 4.
+                  Some possible matches are waiting for uploader review.
                 </p>
               )}
             </div>
           )}
 
-        {matchStatus.match_job_status === "done" && photos.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {photos.map((photo) => (
-              <div
-                key={photo.match_id}
-                className="overflow-hidden rounded-xl border bg-white"
-              >
-                <img
-                  src={photo.signed_url}
-                  alt={`Matched photo ${photo.photo_id}`}
-                  className="h-64 w-full object-cover"
-                />
+        {matchStatus.match_job_status === "done" &&
+          photos.length > 0 && (
+            <>
+              <div className="rounded-xl border bg-gray-50 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      Your matched photos
+                    </h2>
 
-                <div className="p-3 text-sm">
-                  <p className="font-medium">
-                    Confidence: {(photo.confidence * 100).toFixed(1)}%
-                  </p>
-                  <p className="text-gray-500">
-                    Matched: {new Date(photo.matched_at).toLocaleString()}
-                  </p>
+                    <p className="text-sm text-gray-600">
+                      {photos.length} confirmed photo
+                      {photos.length !== 1 ? "s" : ""} found.
+                    </p>
+                  </div>
 
-                  <a
-                    href={photo.signed_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 block rounded-lg bg-black p-2 text-center text-white"
+                  <button
+                    onClick={downloadAllAsZip}
+                    disabled={downloadingZip}
+                    className="rounded-lg bg-black px-4 py-3 text-white disabled:opacity-50"
                   >
-                    Open Photo
-                  </a>
+                    {downloadingZip
+                      ? "Preparing ZIP..."
+                      : "Download All as ZIP"}
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.match_id}
+                    className="overflow-hidden rounded-xl border bg-white"
+                  >
+                    <img
+                      src={photo.signed_url}
+                      alt={`Matched photo ${photo.photo_id}`}
+                      className="h-64 w-full object-cover"
+                    />
+
+                    <div className="p-3 text-sm">
+                      <p className="font-medium">
+                        Confidence:{" "}
+                        {(photo.confidence * 100).toFixed(1)}%
+                      </p>
+
+                      <p className="text-gray-500">
+                        Matched:{" "}
+                        {new Date(
+                          photo.matched_at
+                        ).toLocaleString()}
+                      </p>
+
+                      <a
+                        href={photo.signed_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 block rounded-lg bg-black p-2 text-center text-white"
+                      >
+                        Open Photo
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
         <button
           onClick={() => router.push("/room/join")}

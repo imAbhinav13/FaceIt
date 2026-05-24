@@ -4,9 +4,12 @@ from datetime import datetime, timedelta, timezone
 from lib.supabase import supabase
 from worker.jobs.process_photo import process_photo_job
 from worker.jobs.match_user import process_match_user_job
-
+from worker.jobs.expire_rooms import run_expiry_check
+from routes.guest import cleanup_expired_guest_sessions
 
 POLL_SECONDS = 5
+EXPIRY_CHECK_SECONDS = 60
+LAST_EXPIRY_CHECK = 0
 
 
 def now_iso() -> str:
@@ -141,7 +144,16 @@ def run_worker():
 
     reset_stuck_jobs()
 
+    global LAST_EXPIRY_CHECK
     while True:
+
+        current_time = time.time()
+
+        if current_time - LAST_EXPIRY_CHECK >= EXPIRY_CHECK_SECONDS:
+            run_expiry_check()
+            cleanup_expired_guest_sessions()
+            LAST_EXPIRY_CHECK = current_time
+
         job = get_next_pending_job()
 
         if not job:

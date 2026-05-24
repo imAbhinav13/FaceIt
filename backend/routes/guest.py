@@ -2,6 +2,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
@@ -299,6 +300,7 @@ def start_guest_match(
 
     guest_sessions[session_id] = {
         "status": "pending",
+        "created_at": datetime.now(timezone.utc),
         "room": {
             "id": room["id"],
             "room_code": room["room_code"],
@@ -365,3 +367,25 @@ def get_guest_status(code: str, session_id: str):
         "error": session["error"],
         "signed_url_ttl_seconds": settings.signed_url_ttl_seconds,
     }
+
+
+def cleanup_expired_guest_sessions(max_age_hours: int = 2) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+
+    expired_session_ids = []
+
+    for session_id, session in guest_sessions.items():
+        created_at = session.get("created_at")
+
+        if created_at and created_at < cutoff:
+            expired_session_ids.append(session_id)
+
+    for session_id in expired_session_ids:
+        guest_sessions.pop(session_id, None)
+
+    if expired_session_ids:
+        print(
+            f"Guest session cleanup: removed {len(expired_session_ids)} expired session(s)."
+        )
+
+    return len(expired_session_ids)

@@ -20,7 +20,7 @@ export default function CreateRoomPage() {
   const [eventName, setEventName] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [createdEvent, setCreatedEvent] = useState<CreatedEvent | null>(null);
-
+  const [ttlDays, setTtlDays] = useState(2);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
@@ -69,6 +69,7 @@ export default function CreateRoomPage() {
         {
           name: eventName.trim(),
           room_code: roomCode.trim() || null,
+          ttl_days: ttlDays,
         },
         {
           headers: {
@@ -119,6 +120,30 @@ export default function CreateRoomPage() {
           <p className="text-xs text-gray-500">
             Room code must be 6 characters. Avoids 0, O, I, and 1.
           </p>
+          <div className="space-y-2">
+          <label
+            htmlFor="ttl-days"
+            className="text-sm font-medium"
+          >
+            Keep photos for
+          </label>
+
+          <select
+            id="ttl-days"
+            title="Photo retention duration"
+            value={ttlDays}
+            onChange={(e) => setTtlDays(Number(e.target.value))}
+            className="w-full rounded-lg border p-3"
+          >
+            <option value={2}>2 days</option>
+            <option value={5}>5 days</option>
+            <option value={7}>7 days</option>
+          </select>
+
+          <p className="text-xs text-gray-500">
+            Photos and matches are automatically deleted after this period.
+          </p>
+        </div>
 
           <button
             disabled={creating}

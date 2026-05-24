@@ -177,10 +177,18 @@ export default function RoomPage() {
               <span className="font-medium text-gray-900">Created:</span>{" "}
               {new Date(room.created_at).toLocaleString()}
             </p>
-            <p>
-              <span className="font-medium text-gray-900">Expires:</span>{" "}
+            <div className="rounded-lg border bg-gray-50 p-3 text-sm">
+            <p className="font-medium text-gray-700">
+              Photos available until
+            </p>
+
+            <p className="mt-1 text-base font-semibold">
               {new Date(room.expires_at).toLocaleString()}
             </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Photos and matches are automatically deleted after expiry.
+            </p>
+          </div>
           </div>
         </div>
 
