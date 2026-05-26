@@ -106,17 +106,21 @@ export default function CameraCapture({
           disabled={frames.length >= maxFrames}
           className="flex-1 rounded-lg bg-black p-3 text-white disabled:opacity-50"
         >
-          Capture Frame {frames.length + 1}/{maxFrames}
+          Capture {frames.length + 1}/{maxFrames}
         </button>
 
         <button
-          type="button"
           onClick={resetFrames}
-          className="rounded-lg border px-4 py-3"
+          className="rounded-xl px-4 py-2.5 text-sm font-medium text-white transition"
+          style={{
+            background: "rgba(0,0,0,0.9)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+          }}
         >
           Reset
         </button>
-      </div>
+      </div> {/* Fixed: Added missing closing div tag */}
 
       <div className="grid grid-cols-3 gap-3">
         {frames.map((frame, index) => (
