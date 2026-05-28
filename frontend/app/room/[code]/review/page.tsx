@@ -296,17 +296,14 @@ function ReviewCard({
         <img
           src={match.signed_url}
           alt={`Review match for ${label}`}
-          className="block w-full h-auto max-h-64 object-cover transition duration-500 group-hover:scale-[1.03]"
+          className="block w-full h-auto"
           style={{ minHeight: "180px" }}
         />
-
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 
         {/* Face bounding box */}
         {hasBoundingBox && (
           <div
-            className="pointer-events-none absolute z-10 transition-all duration-300"
+            className="pointer-events-none absolute z-20 border-2 border-cyan-200 bg-cyan-300/10 shadow-[0_0_22px_rgba(103,232,249,0.35)] transition duration-300 group-hover:shadow-[0_0_34px_rgba(103,232,249,0.75)]"
             style={{
               left: `${match.bounding_box!.x_pct}%`,
               top: `${match.bounding_box!.y_pct}%`,
